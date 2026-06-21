@@ -408,18 +408,22 @@ function startScroll() {
   stopScroll();
   setScrollIcons("⏸");
   requestWake();
-  let acc = 0;
-  scrollTimer = setInterval(() => {
-    acc += scrollSpeed / 10;
-    if (acc >= 1) {
-      window.scrollBy(0, Math.floor(acc));
-      acc -= Math.floor(acc);
-    }
-    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 2) stopScroll();
-  }, 30);
+  let pos = window.scrollY;   // posição fracionada (suave)
+  let last = 0;
+  const step = (ts) => {
+    if (!last) last = ts;
+    const dt = Math.min(ts - last, 50);  // limita salto se a aba ficou em segundo plano
+    last = ts;
+    pos += scrollSpeed * 7 * (dt / 1000); // px por segundo ≈ velocidade × 7
+    window.scrollTo(0, pos);
+    const maxY = document.documentElement.scrollHeight - window.innerHeight;
+    if (pos >= maxY) { stopScroll(); return; }
+    scrollTimer = requestAnimationFrame(step);
+  };
+  scrollTimer = requestAnimationFrame(step);
 }
 function stopScroll() {
-  if (scrollTimer) { clearInterval(scrollTimer); scrollTimer = null; }
+  if (scrollTimer) { cancelAnimationFrame(scrollTimer); scrollTimer = null; }
   releaseWake();
   setScrollIcons("▶");
 }
