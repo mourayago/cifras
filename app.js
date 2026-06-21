@@ -24,8 +24,28 @@ const app = document.getElementById("app");
 let currentTab = "todas";
 let searchTerm = "";
 
+// ---------- Estado da nuvem (Firebase) ----------
+let cloudCifras = [];   // cifras vindas do Firestore
+let isAdmin = false;    // logado = pode adicionar/editar
+
+// Chamado pelo firebase-init.js sempre que as cifras da nuvem mudam
+window.onCloudCifras = (arr) => {
+  cloudCifras = arr;
+  if (!location.hash.startsWith("#cifra/")) render();
+};
+
+// Chamado quando o login muda
+window.onAuthChange = (user) => {
+  isAdmin = !!user;
+  updateAuthBtn();
+  migrateLocalToCloud();
+  render();
+};
+
+window.onCloudError = () => {};
+
 // ---------- Helpers ----------
-function allCifras() { return CIFRAS.concat(store.userCifras || []); }
+function allCifras() { return CIFRAS.concat(cloudCifras).concat(store.userCifras || []); }
 function getCifra(id) { return allCifras().find(c => c.id === id); }
 function cifraId(title) {
   const base = (title || "cifra").toLowerCase()
@@ -95,7 +115,9 @@ function renderHome() {
         c.title.toLowerCase().includes(t) || c.artist.toLowerCase().includes(t));
     }
     items.sort((a,b) => a.title.localeCompare(b.title));
-    const importBtn = `<button class="btn" id="importBtn" style="width:100%;margin-bottom:14px">＋ Importar cifra (texto ou PDF)</button>`;
+    const importBtn = isAdmin
+      ? `<button class="btn" id="importBtn" style="width:100%;margin-bottom:14px">＋ Importar cifra (texto ou PDF)</button>`
+      : "";
     const list = items.length
       ? items.map(cardHTML).join("")
       : `<div class="empty">${currentTab==='favoritas' ? 'Nenhuma cifra favoritada ainda.' : 'Nenhuma cifra encontrada.'}</div>`;
@@ -236,7 +258,7 @@ function renderCifra(id) {
       <div class="tool-group" style="margin-left:auto">
         <button class="icon-btn ${isFav(id)?'active':''}" id="favBtn" title="Favoritar" style="${isFav(id)?'color:var(--gold)':''}">★</button>
         <button class="icon-btn" id="listBtn" title="Adicionar à lista">＋☰</button>
-        ${c.custom ? `<button class="icon-btn" id="editBtn" title="Editar cifra">✎</button>
+        ${canEdit(c) ? `<button class="icon-btn" id="editBtn" title="Editar cifra">✎</button>
         <button class="icon-btn" id="delBtn" title="Excluir cifra">🗑</button>` : ""}
       </div>
     </div>
@@ -270,13 +292,18 @@ function renderCifra(id) {
   document.getElementById("favBtn").onclick = () => { toggleFav(id); renderCifra(id); };
   document.getElementById("listBtn").onclick = () => openListModal(id);
 
-  if (c.custom) {
+  if (canEdit(c)) {
     document.getElementById("editBtn").onclick = () => openImportModal(id);
     document.getElementById("delBtn").onclick = () => {
-      if (!confirm("Excluir esta cifra importada?")) return;
-      store.userCifras = store.userCifras.filter(x => x.id !== id);
+      if (!confirm("Excluir esta cifra?")) return;
       delete store.favorites[id];
       Object.values(store.lists).forEach(l => l.cifras = l.cifras.filter(x => x !== id));
+      if (c.cloud) {
+        cloudCifras = cloudCifras.filter(x => x.id !== id);
+        window.CifrasDB && window.CifrasDB.remove(id).catch(e => alert("Erro ao excluir: " + e.message));
+      } else {
+        store.userCifras = store.userCifras.filter(x => x.id !== id);
+      }
       saveStore();
       go("");
     };
@@ -422,13 +449,29 @@ function openImportModal(editId) {
     if (!content.trim()) { alert("Cole ou importe o conteúdo da cifra."); return; }
     const key = q("#impKey").value.trim() || detectKey(content) || "?";
     const artist = q("#impArtist").value.trim() || "—";
-    if (editing) {
-      Object.assign(editing, { title, artist, key, content });
+    const data = { title, artist, key, content, tags: ["Importada"] };
+
+    if (editing && editing.cloud) {
+      if (!window.CifrasDB) { alert("Sem conexão com a nuvem."); return; }
+      Object.assign(editing, data);
+      window.CifrasDB.update(editing.id, data).catch(e => alert("Erro ao salvar: " + e.message));
+      overlay.remove(); renderCifra(editing.id);
+    } else if (editing) {
+      Object.assign(editing, data);
       saveStore(); overlay.remove(); renderCifra(editing.id);
     } else {
-      const id = cifraId(title);
-      store.userCifras.push({ id, title, artist, key, content, tags: ["Importada"], custom: true });
-      saveStore(); overlay.remove(); go("cifra/" + id);
+      // Nova cifra → salva na nuvem (aparece em todos os aparelhos)
+      if (!window.CifrasDB) { alert("Sem conexão com a nuvem. Tente novamente online."); return; }
+      const saveBtn = q("#impSave");
+      saveBtn.disabled = true; saveBtn.textContent = "Salvando...";
+      window.CifrasDB.add(data).then(id => {
+        cloudCifras.push(Object.assign({ id, cloud: true }, data));
+        overlay.remove();
+        go("cifra/" + id);
+      }).catch(e => {
+        saveBtn.disabled = false; saveBtn.textContent = "Salvar cifra";
+        alert("Erro ao salvar na nuvem: " + e.message);
+      });
     }
   };
 }
@@ -559,6 +602,83 @@ document.addEventListener("click", (e) => {
     };
   }
 });
+
+// ============================================================
+//  LOGIN / PERMISSÃO
+// ============================================================
+// Pode editar: cifras da nuvem só se logado; cifras locais (legado) sempre.
+function canEdit(c) {
+  if (c.cloud) return isAdmin;
+  if (c.custom) return true;
+  return false;
+}
+
+function updateAuthBtn() {
+  const btn = document.getElementById("authBtn");
+  if (!btn) return;
+  btn.textContent = isAdmin ? "🔓" : "🔒";
+  btn.title = isAdmin ? "Sair (você está logado)" : "Entrar para editar";
+}
+
+function openLoginModal() {
+  if (!window.CifrasDB) { alert("Sem conexão com a nuvem. Verifique a internet."); return; }
+  const overlay = openModal(`
+    <h3>Entrar para editar</h3>
+    <p style="color:var(--text-dim);font-size:14px;margin-bottom:14px">
+      Use o e-mail e a senha que você cadastrou no Firebase. Só você precisa entrar — outras pessoas podem ver as cifras sem login.
+    </p>
+    <input id="logEmail" type="email" placeholder="E-mail" autocomplete="username">
+    <input id="logPass" type="password" placeholder="Senha" autocomplete="current-password">
+    <div id="logErr" style="color:var(--accent);font-size:13px;min-height:16px;margin-bottom:10px"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="logCancel">Cancelar</button>
+      <button class="btn" id="logGo">Entrar</button>
+    </div>`);
+  const q = (s) => overlay.querySelector(s);
+  q("#logCancel").onclick = () => overlay.remove();
+  const submit = () => {
+    const email = q("#logEmail").value.trim();
+    const pass = q("#logPass").value;
+    if (!email || !pass) { q("#logErr").textContent = "Preencha e-mail e senha."; return; }
+    const btn = q("#logGo");
+    btn.disabled = true; btn.textContent = "Entrando...";
+    window.CifrasDB.login(email, pass).then(() => {
+      overlay.remove();
+    }).catch(() => {
+      btn.disabled = false; btn.textContent = "Entrar";
+      q("#logErr").textContent = "E-mail ou senha incorretos.";
+    });
+  };
+  q("#logGo").onclick = submit;
+  q("#logPass").addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+}
+
+// Oferece subir cifras importadas só localmente para a nuvem (uma vez, ao logar)
+function migrateLocalToCloud() {
+  if (!isAdmin || !window.CifrasDB) return;
+  const locais = store.userCifras || [];
+  if (!locais.length) return;
+  if (!confirm(`Você tem ${locais.length} cifra(s) importada(s) só neste aparelho. Enviar para a nuvem (aparecer em todos os aparelhos)?`)) return;
+  Promise.all(locais.map(c =>
+    window.CifrasDB.add({ title: c.title, artist: c.artist, key: c.key, content: c.content, tags: c.tags || ["Importada"] })
+  )).then(() => {
+    store.userCifras = [];
+    saveStore();
+  }).catch(e => alert("Erro ao enviar para a nuvem: " + e.message));
+}
+
+// Botão de login/logout no topo
+(function () {
+  const btn = document.getElementById("authBtn");
+  if (btn) btn.onclick = () => {
+    if (isAdmin) {
+      if (confirm("Sair da sua conta? Você não poderá adicionar/editar até entrar de novo.")) window.CifrasDB.logout();
+    } else {
+      openLoginModal();
+    }
+  };
+  updateAuthBtn();
+})();
 
 // ---------- util ----------
 function esc(s) {
