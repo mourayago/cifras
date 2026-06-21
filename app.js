@@ -15,15 +15,35 @@ const store = Object.assign({
   favorites: {},      // { cifraId: true }
   lists: {},          // { listId: { name, cifras: [ids] } }
   fontSize: 17,
-  prefs: {}           // { cifraId: { transpose: n } }
+  prefs: {},          // { cifraId: { transpose: n } }
+  userCifras: []      // cifras importadas pelo usuário (texto/PDF)
 }, loadStore());
+if (!store.userCifras) store.userCifras = [];
 
 const app = document.getElementById("app");
 let currentTab = "todas";
 let searchTerm = "";
 
 // ---------- Helpers ----------
-function getCifra(id) { return CIFRAS.find(c => c.id === id); }
+function allCifras() { return CIFRAS.concat(store.userCifras || []); }
+function getCifra(id) { return allCifras().find(c => c.id === id); }
+function cifraId(title) {
+  const base = (title || "cifra").toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "cifra";
+  let id = base, n = 2;
+  while (getCifra(id)) { id = base + "-" + n; n++; }
+  return id;
+}
+function detectKey(content) {
+  for (const line of content.split("\n")) {
+    if (isChordLine(line)) {
+      const tok = line.trim().split(/\s+/).find(isChordToken);
+      if (tok) { const m = tok.match(/^[A-G][#b]?m?/); if (m) return m[0]; }
+    }
+  }
+  return null;
+}
 function isFav(id) { return !!store.favorites[id]; }
 function toggleFav(id) {
   if (store.favorites[id]) delete store.favorites[id];
@@ -67,7 +87,7 @@ function renderHome() {
   if (currentTab === "listas") {
     body = renderListsTab();
   } else {
-    let items = CIFRAS.slice();
+    let items = allCifras().slice();
     if (currentTab === "favoritas") items = items.filter(c => isFav(c.id));
     if (searchTerm) {
       const t = searchTerm.toLowerCase();
@@ -75,15 +95,19 @@ function renderHome() {
         c.title.toLowerCase().includes(t) || c.artist.toLowerCase().includes(t));
     }
     items.sort((a,b) => a.title.localeCompare(b.title));
-    body = items.length
+    const importBtn = `<button class="btn" id="importBtn" style="width:100%;margin-bottom:14px">＋ Importar cifra (texto ou PDF)</button>`;
+    const list = items.length
       ? items.map(cardHTML).join("")
       : `<div class="empty">${currentTab==='favoritas' ? 'Nenhuma cifra favoritada ainda.' : 'Nenhuma cifra encontrada.'}</div>`;
+    body = importBtn + list;
   }
 
   app.innerHTML = `<div class="container">${tabs}${body}</div>`;
 
   app.querySelectorAll(".tab").forEach(b =>
     b.onclick = () => { currentTab = b.dataset.tab; render(); });
+  const ib = document.getElementById("importBtn");
+  if (ib) ib.onclick = () => openImportModal();
   bindCards();
 }
 
@@ -212,6 +236,8 @@ function renderCifra(id) {
       <div class="tool-group" style="margin-left:auto">
         <button class="icon-btn ${isFav(id)?'active':''}" id="favBtn" title="Favoritar" style="${isFav(id)?'color:var(--gold)':''}">★</button>
         <button class="icon-btn" id="listBtn" title="Adicionar à lista">＋☰</button>
+        ${c.custom ? `<button class="icon-btn" id="editBtn" title="Editar cifra">✎</button>
+        <button class="icon-btn" id="delBtn" title="Excluir cifra">🗑</button>` : ""}
       </div>
     </div>
 
@@ -243,6 +269,18 @@ function renderCifra(id) {
 
   document.getElementById("favBtn").onclick = () => { toggleFav(id); renderCifra(id); };
   document.getElementById("listBtn").onclick = () => openListModal(id);
+
+  if (c.custom) {
+    document.getElementById("editBtn").onclick = () => openImportModal(id);
+    document.getElementById("delBtn").onclick = () => {
+      if (!confirm("Excluir esta cifra importada?")) return;
+      store.userCifras = store.userCifras.filter(x => x.id !== id);
+      delete store.favorites[id];
+      Object.values(store.lists).forEach(l => l.cifras = l.cifras.filter(x => x !== id));
+      saveStore();
+      go("");
+    };
+  }
 
   document.getElementById("scrollSpeed").oninput = (e) => { scrollSpeed = +e.target.value; };
   document.getElementById("scrollToggle").onclick = toggleScroll;
@@ -327,13 +365,127 @@ function setScrollIcons(sym) {
 // ============================================================
 //  MODAIS
 // ============================================================
-function openModal(html) {
+function openModal(html, wide) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
-  overlay.innerHTML = `<div class="modal">${html}</div>`;
+  overlay.innerHTML = `<div class="modal${wide ? " wide" : ""}">${html}</div>`;
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
   document.body.appendChild(overlay);
   return overlay;
+}
+
+// ============================================================
+//  IMPORTAR CIFRA (texto ou PDF)
+// ============================================================
+function openImportModal(editId) {
+  const editing = editId ? getCifra(editId) : null;
+  const overlay = openModal(`
+    <h3>${editing ? "Editar cifra" : "Importar cifra"}</h3>
+    <input id="impTitle" placeholder="Título da música" value="${editing ? esc(editing.title) : ""}">
+    <div style="display:flex; gap:10px">
+      <input id="impArtist" placeholder="Artista" value="${editing ? esc(editing.artist) : ""}" style="flex:2">
+      <input id="impKey" placeholder="Tom" value="${editing ? esc(editing.key) : ""}" style="flex:1; min-width:0">
+    </div>
+    <div class="imp-pdf">
+      <label class="btn ghost" for="impPdf">📄 Extrair de PDF</label>
+      <input type="file" id="impPdf" accept="application/pdf" hidden>
+      <span id="impPdfStatus" class="imp-status">ou cole o texto da cifra abaixo</span>
+    </div>
+    <textarea id="impContent" class="imp-content" placeholder="[Intro] G  D  Em  C&#10;&#10;G            D&#10;Cole aqui a cifra...">${editing ? esc(editing.content) : ""}</textarea>
+    <div class="modal-actions">
+      <button class="btn ghost" id="impCancel">Cancelar</button>
+      <button class="btn" id="impSave">${editing ? "Salvar alterações" : "Salvar cifra"}</button>
+    </div>`, true);
+
+  const q = (s) => overlay.querySelector(s);
+
+  q("#impPdf").onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const status = q("#impPdfStatus");
+    status.textContent = "Lendo PDF...";
+    try {
+      const text = await extractPdfText(file);
+      q("#impContent").value = text;
+      if (!q("#impTitle").value.trim()) q("#impTitle").value = file.name.replace(/\.pdf$/i, "");
+      status.textContent = "✓ PDF importado — revise e ajuste o texto abaixo";
+    } catch (err) {
+      status.textContent = "Erro: " + err.message;
+    }
+  };
+
+  q("#impCancel").onclick = () => overlay.remove();
+  q("#impSave").onclick = () => {
+    const title = q("#impTitle").value.trim();
+    const content = q("#impContent").value;
+    if (!title) { alert("Dê um título à cifra."); return; }
+    if (!content.trim()) { alert("Cole ou importe o conteúdo da cifra."); return; }
+    const key = q("#impKey").value.trim() || detectKey(content) || "?";
+    const artist = q("#impArtist").value.trim() || "—";
+    if (editing) {
+      Object.assign(editing, { title, artist, key, content });
+      saveStore(); overlay.remove(); renderCifra(editing.id);
+    } else {
+      const id = cifraId(title);
+      store.userCifras.push({ id, title, artist, key, content, tags: ["Importada"], custom: true });
+      saveStore(); overlay.remove(); go("cifra/" + id);
+    }
+  };
+}
+
+// Extrai texto de um PDF tentando preservar o alinhamento (acordes sobre a letra).
+async function extractPdfText(file) {
+  if (typeof pdfjsLib === "undefined")
+    throw new Error("Biblioteca de PDF não carregou (precisa de internet).");
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const pages = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    pages.push(reconstructPdfPage(tc.items));
+  }
+  return pages.join("\n\n").replace(/[ \t]+\n/g, "\n").trim();
+}
+
+// Reconstrói uma página em texto monoespaçado a partir das posições x/y.
+function reconstructPdfPage(items) {
+  const real = items.filter(i => i.str && i.str.trim() !== "");
+  if (!real.length) return "";
+  const widths = real.map(i => i.width / i.str.length).filter(w => w > 0).sort((a, b) => a - b);
+  const charW = widths.length ? widths[Math.floor(widths.length / 2)] : 5;
+  const minX = Math.min(...real.map(i => i.transform[4]));
+
+  const rows = [];
+  for (const it of real) {
+    const x = it.transform[4], y = it.transform[5];
+    let row = rows.find(r => Math.abs(r.y - y) < charW * 0.6);
+    if (!row) { row = { y, items: [] }; rows.push(row); }
+    row.items.push({ x, str: it.str });
+  }
+  rows.sort((a, b) => b.y - a.y);
+
+  // altura de linha típica para detectar parágrafos (linhas em branco)
+  const gaps = [];
+  for (let i = 1; i < rows.length; i++) gaps.push(rows[i - 1].y - rows[i].y);
+  gaps.sort((a, b) => a - b);
+  const lineH = gaps.length ? gaps[Math.floor(gaps.length / 2)] : charW * 2;
+
+  const out = [];
+  rows.forEach((r, i) => {
+    if (i > 0 && (rows[i - 1].y - r.y) > lineH * 1.6) out.push("");
+    r.items.sort((a, b) => a.x - b.x);
+    let line = "";
+    for (const it of r.items) {
+      const col = Math.max(0, Math.round((it.x - minX) / charW));
+      if (col > line.length) line += " ".repeat(col - line.length);
+      line += it.str;
+    }
+    out.push(line.replace(/\s+$/, ""));
+  });
+  return out.join("\n");
 }
 
 function openListModal(cifraId) {
