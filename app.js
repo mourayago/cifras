@@ -295,6 +295,7 @@ function renderCifra(id) {
       </div>
     </div>
 
+    <div id="introBox"></div>
     <div class="cifra-content" id="cifraContent"></div>
   </div>
 
@@ -360,7 +361,19 @@ function renderCifra(id) {
   });
 }
 
+function renderIntro(c, pref) {
+  const box = document.getElementById("introBox");
+  if (!box) return;
+  if (!c.introLeft && !c.introRight) { box.innerHTML = ""; return; }
+  const tn = (s) => esc(transposeIntroText(s || "", pref.transpose, false));
+  let rows = "";
+  if (c.introLeft)  rows += `<div class="intro-row"><span class="intro-hand">🤚 Mão esquerda</span><span class="intro-notes">${tn(c.introLeft)}</span></div>`;
+  if (c.introRight) rows += `<div class="intro-row"><span class="intro-hand">✋ Mão direita</span><span class="intro-notes">${tn(c.introRight)}</span></div>`;
+  box.innerHTML = `<div class="intro-box"><div class="intro-title">🎹 Intro</div>${rows}</div>`;
+}
+
 function renderContent(c, pref) {
+  renderIntro(c, pref);
   const transposed = transposeCifra(c.content, pref.transpose, false);
   const html = transposed.split("\n").map(line => {
     if (isChordLine(line)) {
@@ -458,6 +471,11 @@ function openImportModal(editId) {
       <input id="impArtist" placeholder="Artista" value="${editing ? esc(editing.artist) : ""}" style="flex:2">
       <input id="impKey" placeholder="Tom" value="${editing ? esc(editing.key) : ""}" style="flex:1; min-width:0">
     </div>
+    <details class="imp-intro" ${editing && (editing.introLeft || editing.introRight) ? "open" : ""}>
+      <summary>🎹 Intro de teclado (opcional) — mão esquerda / direita</summary>
+      <input id="impIntroL" placeholder="Mão esquerda (ex.: E | C#m | A)" value="${editing ? esc(editing.introLeft || "") : ""}">
+      <input id="impIntroR" placeholder="Mão direita (ex.: G# | A | B | D# | E, 2x...)" value="${editing ? esc(editing.introRight || "") : ""}">
+    </details>
     <div class="imp-pdf">
       <label class="btn ghost" for="impPdf">📄 Extrair de PDF</label>
       <input type="file" id="impPdf" accept="application/pdf" hidden>
@@ -498,7 +516,9 @@ function openImportModal(editId) {
     if (!content.trim()) { alert("Cole ou importe o conteúdo da cifra."); return; }
     const key = q("#impKey").value.trim() || detectKey(content) || "?";
     const artist = q("#impArtist").value.trim() || "—";
-    const data = { title, artist, key, content, tags: ["Importada"] };
+    const introLeft = q("#impIntroL").value.trim();
+    const introRight = q("#impIntroR").value.trim();
+    const data = { title, artist, key, content, tags: ["Importada"], introLeft, introRight };
 
     if (editing && editing.cloud) {
       if (!window.CifrasDB) { alert("Sem conexão com a nuvem."); return; }

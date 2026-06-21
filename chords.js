@@ -94,6 +94,15 @@ function transposeChordLine(line, n, useFlat) {
   return result;
 }
 
+// Transpõe um texto livre de intro (ex.: "E | C#m | A   2x"),
+// mexendo só nos tokens que são notas/acordes e mantendo palavras e "|".
+function transposeIntroText(text, n, useFlat) {
+  if (!n || !text) return text;
+  return text.split(/(\s+)/).map(t =>
+    /^\s+$/.test(t) ? t : transposeToken(t, n, useFlat)
+  ).join("");
+}
+
 // Transpõe a cifra inteira.
 function transposeCifra(content, n, useFlat) {
   if (n === 0) return content;
