@@ -131,13 +131,29 @@ button { font-family: inherit; cursor: pointer; }
   background: var(--bg-soft);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 12px;
+  padding: 8px 12px;
   margin-bottom: 18px;
+}
+.toolbar-toggle {
+  width: 100%;
+  background: none; border: none;
+  color: var(--text-dim);
+  font-weight: 700; font-size: 12px;
+  text-transform: uppercase; letter-spacing: .5px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 4px; cursor: pointer;
+}
+.toolbar-toggle:hover { color: var(--accent); }
+.toolbar-toggle .chev { font-size: 11px; }
+.toolbar-body {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
   align-items: center;
+  padding-top: 10px;
 }
+.toolbar.collapsed { padding: 6px 12px; }
+.toolbar.collapsed .toolbar-body { display: none; }
 .tool-group { display: flex; align-items: center; gap: 8px; }
 .tool-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; font-weight: 700; margin-right: 2px; }
 .icon-btn {
@@ -225,12 +241,11 @@ body.reading .topbar { display: none; }
   .container { padding: 14px 12px 80px; }
   .cifra-header { margin-bottom: 10px; }
   .cifra-header h1 { font-size: 22px; }
-  .toolbar {
-    gap: 10px 14px;
-    padding: 10px 12px;
+  .toolbar-body {
+    gap: 12px 14px;
     justify-content: center;
   }
-  .toolbar .tool-group { margin-left: 0 !important; }
+  .toolbar-body .tool-group { margin-left: 0 !important; }
 
   /* Alvos de toque maiores no celular */
   .icon-btn { width: 44px; height: 44px; font-size: 18px; border-radius: 11px; }

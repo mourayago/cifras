@@ -9,16 +9,43 @@ function loadStore() {
     return JSON.parse(localStorage.getItem(STORE_KEY)) || {};
   } catch (e) { return {}; }
 }
-function saveStore() { localStorage.setItem(STORE_KEY, JSON.stringify(store)); }
+let applyingRemote = false;   // evita re-enviar dados que acabaram de chegar da nuvem
+function saveStore() {
+  localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  if (isAdmin && window.CifrasDB && !applyingRemote) scheduleUserPush();
+}
 
 const store = Object.assign({
   favorites: {},      // { cifraId: true }
   lists: {},          // { listId: { name, cifras: [ids] } }
   fontSize: 17,
   prefs: {},          // { cifraId: { transpose: n } }
-  userCifras: []      // cifras importadas pelo usuário (texto/PDF)
+  userCifras: [],     // cifras importadas só local (legado, antes da nuvem)
+  toolbarOpen: true   // menu de controles dentro da cifra aberto/recolhido
 }, loadStore());
 if (!store.userCifras) store.userCifras = [];
+
+// ---------- Sincronização de favoritos/listas (nuvem) ----------
+let userPushTimer = null;
+function scheduleUserPush() {
+  clearTimeout(userPushTimer);
+  userPushTimer = setTimeout(pushUserData, 800);
+}
+function pushUserData() {
+  if (!isAdmin || !window.CifrasDB) return;
+  window.CifrasDB.saveUser({ favorites: store.favorites, lists: store.lists })
+    .catch(e => console.error("Erro ao sincronizar dados:", e));
+}
+// Chamado pelo firebase-init.js quando os dados pessoais mudam na nuvem
+window.onUserData = (data) => {
+  if (!data) { pushUserData(); return; } // primeira vez: sobe o que já existe local
+  applyingRemote = true;
+  store.favorites = data.favorites || {};
+  store.lists = data.lists || {};
+  localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  applyingRemote = false;
+  if (!location.hash.startsWith("#cifra/")) render();
+};
 
 const app = document.getElementById("app");
 let currentTab = "todas";
@@ -235,7 +262,11 @@ function renderCifra(id) {
       <div class="artist">${esc(c.artist)}</div>
     </div>
 
-    <div class="toolbar">
+    <div class="toolbar ${store.toolbarOpen === false ? "collapsed" : ""}" id="toolbar">
+      <button class="toolbar-toggle" id="toolbarToggle">
+        <span>⚙ Controles</span><span class="chev">${store.toolbarOpen === false ? "▸" : "▾"}</span>
+      </button>
+      <div class="toolbar-body">
       <div class="tool-group">
         <span class="tool-label">Tom</span>
         <button class="icon-btn" id="tDown" title="Meio tom abaixo">−</button>
@@ -261,6 +292,7 @@ function renderCifra(id) {
         ${canEdit(c) ? `<button class="icon-btn" id="editBtn" title="Editar cifra">✎</button>
         <button class="icon-btn" id="delBtn" title="Excluir cifra">🗑</button>` : ""}
       </div>
+      </div>
     </div>
 
     <div class="cifra-content" id="cifraContent"></div>
@@ -275,6 +307,15 @@ function renderCifra(id) {
 
   // --- binds ---
   app.querySelector("[data-go]").onclick = () => go("");
+
+  document.getElementById("toolbarToggle").onclick = () => {
+    store.toolbarOpen = store.toolbarOpen === false;  // alterna (undefined/true -> false)
+    const tb = document.getElementById("toolbar");
+    const collapsed = store.toolbarOpen === false;
+    tb.classList.toggle("collapsed", collapsed);
+    tb.querySelector(".chev").textContent = collapsed ? "▸" : "▾";
+    saveStore();
+  };
 
   document.getElementById("tDown").onclick = () => { pref.transpose -= 1; saveStore(); refreshCifra(c, pref); };
   document.getElementById("tUp").onclick   = () => { pref.transpose += 1; saveStore(); refreshCifra(c, pref); };
@@ -433,9 +474,13 @@ function openImportModal(editId) {
     status.textContent = "Lendo PDF...";
     try {
       const text = await extractPdfText(file);
-      q("#impContent").value = text;
-      if (!q("#impTitle").value.trim()) q("#impTitle").value = file.name.replace(/\.pdf$/i, "");
-      status.textContent = "✓ PDF importado — revise e ajuste o texto abaixo";
+      const meta = parsePdfMeta(text);
+      q("#impContent").value = meta.content || text;
+      if (meta.title && !q("#impTitle").value.trim()) q("#impTitle").value = meta.title;
+      else if (!q("#impTitle").value.trim()) q("#impTitle").value = file.name.replace(/\.pdf$/i, "").replace(/^Cifra Club\s*-\s*/i, "");
+      if (meta.artist && !q("#impArtist").value.trim()) q("#impArtist").value = meta.artist;
+      if (meta.key && !q("#impKey").value.trim()) q("#impKey").value = meta.key;
+      status.textContent = "✓ PDF importado — confira título/tom e ajuste se precisar";
     } catch (err) {
       status.textContent = "Erro: " + err.message;
     }
@@ -474,6 +519,33 @@ function openImportModal(editId) {
       });
     }
   };
+}
+
+// Detecta cabeçalho de cifra (formato Cifra Club): título, artista, tom.
+function parsePdfMeta(text) {
+  const lines = text.split("\n");
+  const meta = { title: "", artist: "", key: "", content: text };
+  // início do corpo = primeira seção [..] ou primeira linha de acordes
+  let bodyStart = lines.length;
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (t.startsWith("[") || (t && isChordLine(lines[i]))) { bodyStart = i; break; }
+  }
+  const metaPrefix = /^(composi[çc][ãa]o|afina[çc][ãa]o|capotraste|capo|intérprete|interprete)\b/i;
+  const nonMeta = [];
+  for (const h of lines.slice(0, bodyStart)) {
+    const t = h.trim();
+    if (!t) continue;
+    const km = t.match(/^tom:\s*(.+)$/i);
+    if (km) { meta.key = km[1].trim(); continue; }
+    if (metaPrefix.test(t)) continue;
+    nonMeta.push(t);
+  }
+  if (nonMeta[0]) meta.title = nonMeta[0];
+  if (nonMeta[1]) meta.artist = nonMeta[1];
+  meta.content = lines.slice(bodyStart).join("\n").trim();
+  if (!meta.content) meta.content = text; // fallback se não achou corpo
+  return meta;
 }
 
 // Extrai texto de um PDF tentando preservar o alinhamento (acordes sobre a letra).

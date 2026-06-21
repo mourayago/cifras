@@ -39,9 +39,16 @@ onSnapshot(col, (snap) => {
   if (typeof window.onCloudError === "function") window.onCloudError(err);
 });
 
-// Escuta o estado de login
+// Escuta o estado de login + dados pessoais (favoritos/listas) na nuvem
+let userUnsub = null;
 onAuthStateChanged(auth, (user) => {
+  if (userUnsub) { userUnsub(); userUnsub = null; }
   if (typeof window.onAuthChange === "function") window.onAuthChange(user);
+  if (user) {
+    userUnsub = onSnapshot(doc(db, "users", user.uid), (d) => {
+      if (typeof window.onUserData === "function") window.onUserData(d.exists() ? d.data() : null);
+    }, (err) => console.error("user doc erro:", err));
+  }
 });
 
 // API exposta para o app.js (script clássico)
@@ -65,6 +72,11 @@ window.CifrasDB = {
   },
   currentUser() {
     return auth.currentUser;
+  },
+  saveUser(data) {
+    const u = auth.currentUser;
+    if (!u) return Promise.reject(new Error("não logado"));
+    return setDoc(doc(db, "users", u.uid), data, { merge: true });
   }
 };
 
