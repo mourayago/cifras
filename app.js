@@ -489,44 +489,54 @@ function reconstructPdfPage(items) {
 }
 
 function openListModal(cifraId) {
-  const lists = Object.entries(store.lists);
-  const listHTML = lists.length
-    ? lists.map(([id, l]) => `
-        <div class="list-pick" data-pick="${id}">
+  const renderPicks = () => {
+    const lists = Object.entries(store.lists);
+    if (!lists.length)
+      return `<p style="color:var(--text-dim);padding:6px 0">Você ainda não tem listas. Crie uma abaixo 👇</p>`;
+    return lists.map(([id, l]) => {
+      const inList = l.cifras.includes(cifraId);
+      return `
+        <div class="list-pick ${inList ? "picked" : ""}" data-pick="${id}">
           <span>${esc(l.name)}</span>
-          <span class="check">${l.cifras.includes(cifraId) ? "✓" : ""}</span>
-        </div>`).join("")
-    : `<p style="color:var(--text-dim);margin-bottom:14px">Nenhuma lista ainda.</p>`;
+          <span class="check">${inList ? "✓ adicionada" : "+ adicionar"}</span>
+        </div>`;
+    }).join("");
+  };
 
   const overlay = openModal(`
     <h3>Adicionar à lista</h3>
-    ${listHTML}
-    <div style="margin-top:16px">
+    <div id="listPickWrap">${renderPicks()}</div>
+    <div style="margin-top:18px">
       <input id="newListName" placeholder="Nome da nova lista...">
       <div class="modal-actions">
-        <button class="btn ghost" id="closeModal">Fechar</button>
+        <button class="btn ghost" id="closeModal">Concluir</button>
         <button class="btn" id="createList">Criar e adicionar</button>
       </div>
     </div>`);
 
-  overlay.querySelectorAll("[data-pick]").forEach(el =>
-    el.onclick = () => {
-      const l = store.lists[el.dataset.pick];
-      if (l.cifras.includes(cifraId)) l.cifras = l.cifras.filter(x => x !== cifraId);
-      else l.cifras.push(cifraId);
-      saveStore();
-      overlay.remove();
-      openListModal(cifraId);
-    });
+  const wrap = overlay.querySelector("#listPickWrap");
+  const refresh = () => { wrap.innerHTML = renderPicks(); bindPicks(); };
+  function bindPicks() {
+    wrap.querySelectorAll("[data-pick]").forEach(el =>
+      el.onclick = () => {
+        const l = store.lists[el.dataset.pick];
+        if (l.cifras.includes(cifraId)) l.cifras = l.cifras.filter(x => x !== cifraId);
+        else l.cifras.push(cifraId);
+        saveStore();
+        refresh();
+      });
+  }
+  bindPicks();
 
   overlay.querySelector("#closeModal").onclick = () => overlay.remove();
   overlay.querySelector("#createList").onclick = () => {
-    const name = overlay.querySelector("#newListName").value.trim();
-    if (!name) return;
-    const id = uid();
-    store.lists[id] = { name, cifras: [cifraId] };
+    const input = overlay.querySelector("#newListName");
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    store.lists[uid()] = { name, cifras: [cifraId] };
     saveStore();
-    overlay.remove();
+    input.value = "";
+    refresh();
   };
 }
 
