@@ -1,0 +1,229 @@
+:root {
+  --bg: #0f1115;
+  --bg-soft: #171a21;
+  --bg-card: #1c2029;
+  --border: #2a2f3a;
+  --text: #e6e8ee;
+  --text-dim: #9aa3b2;
+  --accent: #ff5a3c;
+  --accent-soft: #2a1d1a;
+  --chord: #ff7a5c;
+  --gold: #ffc24b;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+button { font-family: inherit; cursor: pointer; }
+
+/* ---------- Top bar ---------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(15,17,21,0.92);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.brand {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.3px;
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.brand span { color: var(--accent); }
+.search {
+  flex: 1;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 9px 16px;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  min-width: 0;
+}
+.search:focus { border-color: var(--accent); }
+
+/* ---------- Layout ---------- */
+.container { max-width: 920px; margin: 0 auto; padding: 20px 16px 80px; }
+
+.tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+.tab {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ---------- Cards / lista ---------- */
+.section-title { font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin: 22px 0 10px; font-weight: 700; }
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: border-color .15s, transform .05s;
+}
+.card:hover { border-color: var(--accent); }
+.card:active { transform: scale(0.995); }
+.card-main { flex: 1; min-width: 0; cursor: pointer; }
+.card-title { font-weight: 700; font-size: 16px; }
+.card-sub { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
+.key-badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.star { font-size: 22px; background: none; border: none; color: var(--text-dim); line-height: 1; }
+.star.on { color: var(--gold); }
+
+.empty { color: var(--text-dim); text-align: center; padding: 50px 20px; }
+
+.btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.btn.ghost { background: var(--bg-soft); border: 1px solid var(--border); color: var(--text); }
+
+/* ---------- Detalhe da cifra ---------- */
+.cifra-header { margin-bottom: 14px; }
+.cifra-header h1 { font-size: 26px; letter-spacing: -0.5px; }
+.cifra-header .artist { color: var(--text-dim); font-size: 15px; margin-top: 2px; }
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+.tool-group { display: flex; align-items: center; gap: 8px; }
+.tool-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; font-weight: 700; margin-right: 2px; }
+.icon-btn {
+  width: 34px; height: 34px;
+  border-radius: 9px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 16px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.icon-btn:hover { border-color: var(--accent); }
+.icon-btn.active { background: var(--accent); border-color: var(--accent); color:#fff; }
+.tool-value { min-width: 42px; text-align: center; font-weight: 700; font-size: 15px; }
+select.tool-select, input.tool-range { accent-color: var(--accent); }
+select.tool-select {
+  background: var(--bg-card); color: var(--text);
+  border: 1px solid var(--border); border-radius: 9px;
+  padding: 7px 10px; font-weight: 700; font-size: 14px; outline: none;
+}
+
+.cifra-content {
+  font-family: "SF Mono", "Consolas", "Roboto Mono", ui-monospace, monospace;
+  white-space: pre;
+  overflow-x: auto;
+  font-size: var(--cifra-size, 15px);
+  line-height: 1.55;
+  padding-bottom: 40vh;
+}
+.cifra-content .chord-line { color: var(--chord); font-weight: 700; }
+.cifra-content .marker { color: var(--gold); font-weight: 700; }
+
+.back-link { color: var(--text-dim); background:none; border:none; font-size:14px; margin-bottom:14px; display:inline-flex; align-items:center; gap:6px; }
+.back-link:hover { color: var(--accent); }
+
+/* ---------- Modal ---------- */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6);
+  display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px;
+}
+.modal {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 22px; width: 100%; max-width: 420px;
+}
+.modal h3 { margin-bottom: 14px; }
+.modal input {
+  width: 100%; background: var(--bg-soft); border: 1px solid var(--border);
+  border-radius: 10px; padding: 11px 14px; color: var(--text); font-size: 15px; outline: none; margin-bottom: 14px;
+}
+.modal input:focus { border-color: var(--accent); }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.list-pick { display:flex; align-items:center; justify-content:space-between; padding:11px 4px; border-bottom:1px solid var(--border); cursor:pointer; }
+.list-pick:hover { color: var(--accent); }
+.list-pick .check { color: var(--accent); font-weight:800; }
+
+/* ---------- Floating scroll btn no detalhe ---------- */
+.float-controls { position: fixed; right: 18px; bottom: 18px; z-index: 45; display:flex; flex-direction:column; gap:10px; }
+.fab {
+  width: 54px; height: 54px; border-radius: 50%;
+  background: var(--accent); color:#fff; border:none;
+  font-size: 22px; box-shadow: 0 6px 20px rgba(0,0,0,.4);
+  display:flex; align-items:center; justify-content:center;
+}
+
+/* Ao ler uma cifra, esconde a barra de busca para ganhar espaço */
+body.reading .topbar { display: none; }
+
+@media (max-width: 560px) {
+  .brand .full { display: none; }
+  .container { padding: 14px 12px 80px; }
+  .cifra-header { margin-bottom: 10px; }
+  .cifra-header h1 { font-size: 22px; }
+  .toolbar {
+    gap: 10px 14px;
+    padding: 10px 12px;
+    justify-content: center;
+  }
+  .toolbar .tool-group { margin-left: 0 !important; }
+
+  /* Alvos de toque maiores no celular */
+  .icon-btn { width: 44px; height: 44px; font-size: 18px; border-radius: 11px; }
+  .tab { padding: 11px 18px; }
+  .star { font-size: 26px; padding: 4px; }
+  .key-badge { padding: 6px 12px; font-size: 14px; }
+  .card { padding: 16px; }
+  .search { padding: 12px 16px; font-size: 16px; }
+  .fab { width: 60px; height: 60px; font-size: 24px; }
+  .float-controls { right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); }
+}

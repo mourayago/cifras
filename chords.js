@@ -1,0 +1,114 @@
+// ============================================================
+//  MOTOR DE ACORDES — transposição e detecção
+// ============================================================
+
+const SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const FLAT  = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+
+// Mapa de qualquer nota (sustenido ou bemol) para índice 0-11
+const NOTE_INDEX = {
+  "C": 0, "B#": 0,
+  "C#": 1, "Db": 1,
+  "D": 2,
+  "D#": 3, "Eb": 3,
+  "E": 4, "Fb": 4,
+  "F": 5, "E#": 5,
+  "F#": 6, "Gb": 6,
+  "G": 7,
+  "G#": 8, "Ab": 8,
+  "A": 9,
+  "A#": 10, "Bb": 10,
+  "B": 11, "Cb": 11
+};
+
+// Reconhece um token de acorde isolado.
+// Ex.: D, Bm, F#m, A/C#, E9, E4, Dsus4, Cadd9, G7M, A/C#
+const CHORD_RE = /^[A-G][#b]?(m|maj|min|dim|aug|sus|add|°|º|ø|\+|M)?\d{0,2}(sus\d|add\d|\([^)]*\))?(\/[A-G][#b]?)?$/;
+
+function isChordToken(tok) {
+  return CHORD_RE.test(tok);
+}
+
+function isMarkerToken(tok) {
+  return tok.startsWith("[") || tok.endsWith("]") || tok.startsWith("(") && tok.endsWith(")") && !isChordToken(tok);
+}
+
+// Decide se a LINHA inteira é uma linha de acordes
+// (apenas acordes e/ou marcadores tipo [Intro], sem palavras de letra).
+function isChordLine(line) {
+  const tokens = line.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return false;
+  let hasChord = false;
+  for (const tok of tokens) {
+    if (isChordToken(tok)) { hasChord = true; continue; }
+    if (tok.startsWith("[") || tok.endsWith("]")) continue; // marcador
+    return false; // achou palavra de letra
+  }
+  return hasChord;
+}
+
+// Transpõe um único token (se for acorde). n = semitons.
+function transposeToken(tok, n, useFlat) {
+  if (!isChordToken(tok)) return tok;
+  const scale = useFlat ? FLAT : SHARP;
+  // separa acorde principal de baixo (slash)
+  return tok.replace(/[A-G][#b]?/g, (note) => {
+    const idx = NOTE_INDEX[note];
+    if (idx === undefined) return note;
+    return scale[((idx + n) % 12 + 12) % 12];
+  });
+}
+
+// Transpõe uma linha de acordes preservando o alinhamento
+// com a letra abaixo (compensa mudança de largura nos espaços).
+function transposeChordLine(line, n, useFlat) {
+  let result = "";
+  let carry = 0;
+  const re = /(\s+)|(\S+)/g;
+  let m;
+  while ((m = re.exec(line)) !== null) {
+    if (m[1] !== undefined) {
+      let sp = m[1];
+      if (carry > 0) {
+        const remove = Math.min(carry, sp.length - 1);
+        sp = sp.slice(0, sp.length - remove);
+        carry -= remove;
+      } else if (carry < 0) {
+        sp = sp + " ".repeat(-carry);
+        carry = 0;
+      }
+      result += sp;
+    } else {
+      const tok = m[2];
+      const t = transposeToken(tok, n, useFlat);
+      carry += t.length - tok.length;
+      result += t;
+    }
+  }
+  return result;
+}
+
+// Transpõe a cifra inteira.
+function transposeCifra(content, n, useFlat) {
+  if (n === 0) return content;
+  return content
+    .split("\n")
+    .map((line) => (isChordLine(line) ? transposeChordLine(line, n, useFlat) : line))
+    .join("\n");
+}
+
+// Nome da nota a partir de um tom base + deslocamento em semitons.
+function transposeKeyName(key, n, useFlat) {
+  // separa parte menor (m) se houver: "Am" -> "A" + "m"
+  const match = key.match(/^([A-G][#b]?)(.*)$/);
+  if (!match) return key;
+  const idx = NOTE_INDEX[match[1]];
+  if (idx === undefined) return key;
+  const scale = useFlat ? FLAT : SHARP;
+  return scale[((idx + n) % 12 + 12) % 12] + match[2];
+}
+
+// Lista de todos os tons possíveis para o seletor.
+function allKeys(useFlat) {
+  return useFlat ? FLAT.slice() : SHARP.slice();
+}
