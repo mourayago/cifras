@@ -34,29 +34,35 @@ function isMarkerToken(tok) {
 }
 
 // Decide se a LINHA inteira é uma linha de acordes
-// (apenas acordes e/ou marcadores tipo [Intro], sem palavras de letra).
+// (apenas acordes e/ou marcadores tipo [Intro], aceitando parênteses, sem palavras de letra).
 function isChordLine(line) {
   const tokens = line.trim().split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return false;
   let hasChord = false;
   for (const tok of tokens) {
-    if (isChordToken(tok)) { hasChord = true; continue; }
-    if (tok.startsWith("[") || tok.endsWith("]")) continue; // marcador
-    return false; // achou palavra de letra
+    // remove parênteses/vírgulas nas pontas: "(D", "G2)", "(", ")", "D,"
+    const core = tok.replace(/^[(),|]+|[(),|]+$/g, "");
+    if (core === "") continue;                                // pontuação pura ( )
+    if (isChordToken(core)) { hasChord = true; continue; }
+    if (tok.startsWith("[") || tok.endsWith("]")) continue;   // marcador [..]
+    return false;                                             // achou palavra de letra
   }
   return hasChord;
 }
 
 // Transpõe um único token (se for acorde). n = semitons.
+// Mantém pontuação que envolve o acorde, ex.: "(D", "G2)", "(D)".
 function transposeToken(tok, n, useFlat) {
-  if (!isChordToken(tok)) return tok;
+  const m = tok.match(/^([(),|]*)(.*?)([(),|]*)$/);
+  const pre = m[1], core = m[2], post = m[3];
+  if (!isChordToken(core)) return tok;
   const scale = useFlat ? FLAT : SHARP;
-  // separa acorde principal de baixo (slash)
-  return tok.replace(/[A-G][#b]?/g, (note) => {
+  const t = core.replace(/[A-G][#b]?/g, (note) => {
     const idx = NOTE_INDEX[note];
     if (idx === undefined) return note;
     return scale[((idx + n) % 12 + 12) % 12];
   });
+  return pre + t + post;
 }
 
 // Transpõe uma linha de acordes preservando o alinhamento
