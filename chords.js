@@ -103,12 +103,26 @@ function transposeIntroText(text, n, useFlat) {
   ).join("");
 }
 
+// Linha de "dedilhado/intro" escrita no corpo: tem prosa + notas separadas
+// por "|" (ex.: "Mão esquerda: E | C#m | A"). Transpõe só as notas.
+function isFingeringLine(line) {
+  if (line.indexOf("|") === -1) return false;
+  return line.trim().split(/\s+/).some(t => {
+    const core = t.replace(/^[(),|]+|[(),|]+$/g, "");
+    return core && isChordToken(core);
+  });
+}
+
 // Transpõe a cifra inteira.
 function transposeCifra(content, n, useFlat) {
   if (n === 0) return content;
   return content
     .split("\n")
-    .map((line) => (isChordLine(line) ? transposeChordLine(line, n, useFlat) : line))
+    .map((line) => {
+      if (isChordLine(line)) return transposeChordLine(line, n, useFlat);
+      if (isFingeringLine(line)) return transposeIntroText(line, n, useFlat);
+      return line;
+    })
     .join("\n");
 }
 

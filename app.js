@@ -381,9 +381,20 @@ function renderContent(c, pref) {
       return `<span class="chord-line">${highlightMarkers(line)}</span>`;
     }
     if (line.trim().startsWith("[")) return `<span class="marker">${esc(line)}</span>`;
+    if (isFingeringLine(line)) return highlightFingering(line);
     return esc(line);
   }).join("\n");
   document.getElementById("cifraContent").innerHTML = html;
+}
+
+// Pinta só as notas (tokens de acorde) numa linha de dedilhado, mantendo o texto.
+function highlightFingering(line) {
+  return line.split(/(\s+)/).map(t => {
+    if (/^\s+$/.test(t)) return t;
+    const core = t.replace(/^[(),|]+|[(),|]+$/g, "");
+    if (core && isChordToken(core)) return `<span class="chord-line">${esc(t)}</span>`;
+    return esc(t);
+  }).join("");
 }
 
 function highlightMarkers(line) {
