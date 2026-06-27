@@ -21,9 +21,9 @@ const NOTE_INDEX = {
   "B": 11, "Cb": 11
 };
 
-// Reconhece um token de acorde isolado.
-// Ex.: D, Bm, F#m, A/C#, E9, E4, Dsus4, Cadd9, G7M, A/C#
-const CHORD_RE = /^[A-G][#b]?(m|maj|min|dim|aug|sus|add|°|º|ø|\+|M)?\d{0,2}(sus\d|add\d|\([^)]*\))?(\/[A-G][#b]?)?$/;
+// Reconhece um token de acorde isolado (notação brasileira inclusa).
+// Ex.: D, Bm, F#m7, A/C#, E9, E4, Dsus4, Cadd9, G7M, C7+, Bm7(b5), C6/9, C#m7(b5)/E
+const CHORD_RE = /^[A-G][#b]?(?:maj|min|m|M|dim|aug|sus|add|°|º|ø|\+|-|[#b]?\d+|\([^)]*\))*(?:\/(?:[A-G][#b]?|\d+))?$/;
 
 function isChordToken(tok) {
   return CHORD_RE.test(tok);
@@ -51,18 +51,18 @@ function isChordLine(line) {
 }
 
 // Transpõe um único token (se for acorde). n = semitons.
-// Mantém pontuação que envolve o acorde, ex.: "(D", "G2)", "(D)".
 function transposeToken(tok, n, useFlat) {
-  const m = tok.match(/^([(),|]*)(.*?)([(),|]*)$/);
-  const pre = m[1], core = m[2], post = m[3];
-  if (!isChordToken(core)) return tok;
   const scale = useFlat ? FLAT : SHARP;
-  const t = core.replace(/[A-G][#b]?/g, (note) => {
+  const shift = (s) => s.replace(/[A-G][#b]?/g, (note) => {
     const idx = NOTE_INDEX[note];
-    if (idx === undefined) return note;
-    return scale[((idx + n) % 12 + 12) % 12];
+    return idx === undefined ? note : scale[((idx + n) % 12 + 12) % 12];
   });
-  return pre + t + post;
+  // 1) token inteiro é acorde (inclui acordes com parênteses, ex.: Bm7(b5))
+  if (isChordToken(tok)) return shift(tok);
+  // 2) acorde com pontuação nas pontas, ex.: "(D", "G2)", "|A|"
+  const m = tok.match(/^([(|]*)(.*?)([)|,]*)$/);
+  if (m && isChordToken(m[2])) return m[1] + shift(m[2]) + m[3];
+  return tok;
 }
 
 // Transpõe uma linha de acordes preservando o alinhamento
