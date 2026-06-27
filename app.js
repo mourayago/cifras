@@ -439,6 +439,8 @@ function startScroll() {
     if (!last) last = ts;
     const dt = Math.min(ts - last, 50);  // limita salto se a aba ficou em segundo plano
     last = ts;
+    // Se você rolou manualmente (arrastou pra cima/baixo), ressincroniza e segue dali
+    if (Math.abs(window.scrollY - Math.round(pos)) > 2) pos = window.scrollY;
     pos += scrollSpeed * 7 * (dt / 1000); // px por segundo ≈ velocidade × 7
     window.scrollTo(0, pos);
     const maxY = document.documentElement.scrollHeight - window.innerHeight;
