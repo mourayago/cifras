@@ -40,9 +40,10 @@ function isChordLine(line) {
   if (tokens.length === 0) return false;
   let hasChord = false;
   for (const tok of tokens) {
-    // remove parênteses/vírgulas nas pontas: "(D", "G2)", "(", ")", "D,"
-    const core = tok.replace(/^[(),|]+|[(),|]+$/g, "");
-    if (core === "") continue;                                // pontuação pura ( )
+    if (isChordToken(tok)) { hasChord = true; continue; }     // acorde inteiro (inclui Bm7(9), Bm7(b5))
+    // só então tira pontuação de agrupamento das pontas: "(Bm", "G2)", "(", ")"
+    const core = tok.replace(/^[(|]+|[)|,]+$/g, "");
+    if (core === "") continue;                                // pontuação pura: ( ) | ,
     if (isChordToken(core)) { hasChord = true; continue; }
     if (tok.startsWith("[") || tok.endsWith("]")) continue;   // marcador [..]
     return false;                                             // achou palavra de letra
@@ -108,7 +109,8 @@ function transposeIntroText(text, n, useFlat) {
 function isFingeringLine(line) {
   if (line.indexOf("|") === -1) return false;
   return line.trim().split(/\s+/).some(t => {
-    const core = t.replace(/^[(),|]+|[(),|]+$/g, "");
+    if (isChordToken(t)) return true;
+    const core = t.replace(/^[(|]+|[)|,]+$/g, "");
     return core && isChordToken(core);
   });
 }

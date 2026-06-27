@@ -391,7 +391,8 @@ function renderContent(c, pref) {
 function highlightFingering(line) {
   return line.split(/(\s+)/).map(t => {
     if (/^\s+$/.test(t)) return t;
-    const core = t.replace(/^[(),|]+|[(),|]+$/g, "");
+    if (isChordToken(t)) return `<span class="chord-line">${esc(t)}</span>`;
+    const core = t.replace(/^[(|]+|[)|,]+$/g, "");
     if (core && isChordToken(core)) return `<span class="chord-line">${esc(t)}</span>`;
     return esc(t);
   }).join("");
